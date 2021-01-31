@@ -1,89 +1,211 @@
 //@ts-nocheck
 import React, { FC } from 'react';
-import styled from 'styled-components';
 import { TestComponentProps } from './types';
+import Track from './Track';
+import Handle from './Handle';
+import Thumb from './Thumb';
+import { getClientPosition } from '../utils';
 
-const StyledTrack = styled.div`
-	position: relative;
-	overflow: hidden;
-	width: 100%;
-	height: 300px;
-	border-radius: 0;
-	background: green;
-`;
-
-const Track: FC = ({ container, handleClick, children }) => {
-	return (
-		<StyledTrack ref={container} onClick={handleClick}>
-			{children}
-		</StyledTrack>
-	);
-};
-
-const StyledHandle = styled.div.attrs((props) => ({
-	style: {
-		left: props.style.left,
-		top: props.style.top,
-	},
-}))`
-	position: absolute;
-	transform: translate(-50%, -50%);
-`;
-
-const Handle = ({ children }) => {
-	return (
-		<StyledHandle
-			// ref={handle}
-			style={{
-				left: `50%`,
-				top: `50%`,
-			}}
-		>
-			{children}
-		</StyledHandle>
-	);
-};
-
-const Header = styled.h1`
-	color: ${(props) =>
-		props.theme === 'primary' ? 'rebeccapurple' : 'palevioletred'};
-`;
-
-const Thumb = styled.div`
-	position: relative;
-	display: block;
-	content: '""';
-	background-color: red;
-	border-radius: 50%;
-	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
-	user-select: none;
-	cursor: pointer;
-	box-sizing: border-box;
-	width: 12px;
-	height: 12px;
-`;
-
-const SliderWrapper: FC<any> = ({ children }) => {
+const SliderWrapper: FC<any> = (props) => {
+	const {
+		axis = 'xy',
+		x = 50,
+		y = 50,
+		xmin = 0,
+		xmax = 100,
+		ymin = 0,
+		ymax = 100,
+		xstep = 1,
+		ystep = 1,
+		disabled = false,
+		xreverse = false,
+		yreverse = false,
+		onChange,
+		onDragStart,
+		onDragEnd,
+		children,
+	} = props;
 	const container = React.useRef(null);
+	const handle = React.useRef(null);
+	const start = React.useRef({});
+	const offset = React.useRef({});
+	const [pos, setPos] = React.useState({ top: x, left: y });
 
-	console.log(container);
+	function handleTrackMouseDown(e) {
+		if (disabled) return;
 
-	const handleClick = React.useCallback(() => {
-		//if (disabled) return; handle this later
+		e.preventDefault();
+		const clientPos = getClientPosition(e);
+		const rect = container.current.getBoundingClientRect();
+
+		start.current = {
+			x: clientPos.x - rect.left,
+			y: clientPos.y - rect.top,
+		};
+
+		offset.current = {
+			x: clientPos.x,
+			y: clientPos.y,
+		};
+
+		document.addEventListener('mousemove', handleDrag);
+		document.addEventListener('mouseup', handleDragEnd);
+		document.addEventListener('touchmove', handleDrag, { passive: false });
+		document.addEventListener('touchend', handleDragEnd);
+		document.addEventListener('touchcancel', handleDragEnd);
+
+		change({
+			left: clientPos.x - rect.left,
+			top: clientPos.y - rect.top,
+		});
+
+		if (onDragStart) {
+			onDragStart(e);
+		}
+	}
+
+	function handleMouseDown(e) {
+		if (disabled) return;
+
+		e.preventDefault();
+		e.stopPropagation();
+		e.nativeEvent.stopImmediatePropagation();
+		const dom = handle.current;
+		const clientPos = getClientPosition(e);
+
+		start.current = {
+			x: dom.offsetLeft,
+			y: dom.offsetTop,
+		};
+
+		offset.current = {
+			x: clientPos.x,
+			y: clientPos.y,
+		};
+
+		document.addEventListener('mousemove', handleDrag);
+		document.addEventListener('mouseup', handleDragEnd);
+		document.addEventListener('touchmove', handleDrag, { passive: false });
+		document.addEventListener('touchend', handleDragEnd);
+		document.addEventListener('touchcancel', handleDragEnd);
+
+		if (onDragStart) {
+			onDragStart(e);
+		}
+	}
+
+	function getPos(e) {
+		const clientPos = getClientPosition(e);
+		const left = clientPos.x + start.current.x - offset.current.x;
+		const top = clientPos.y + start.current.y - offset.current.y;
+
+		return { left, top };
+	}
+
+	function handleDrag(e) {
+		if (disabled) return;
+
+		e.preventDefault();
+		change(getPos(e));
+	}
+
+	function handleDragEnd(e) {
+		if (disabled) return;
+
+		e.preventDefault();
+		document.removeEventListener('mousemove', handleDrag);
+		document.removeEventListener('mouseup', handleDragEnd);
+
+		document.removeEventListener('touchmove', handleDrag, {
+			passive: false,
+		});
+		document.removeEventListener('touchend', handleDragEnd);
+		document.removeEventListener('touchcancel', handleDragEnd);
+
+		if (onDragEnd) {
+			onDragEnd(e);
+		}
+	}
+
+	const getNewPosition = React.useCallback((top, left) => {
+		if (!container.current) return { x: 0, y: 0 };
+		const { width, height } = container.current.getBoundingClientRect();
+		let dx = 0;
+		let dy = 0;
+
+		if (left < 0) left = 0;
+		if (left > width) left = width;
+		if (top < 0) top = 0;
+		if (top > height) top = height;
+
+		if (axis === 'x' || axis === 'xy') {
+			dx = (left / width) * (xmax - xmin);
+		}
+
+		if (axis === 'y' || axis === 'xy') {
+			dy = (top / height) * (ymax - ymin);
+		}
+
+		const x = (dx !== 0 ? (dx / xstep) * xstep : 0) + xmin;
+		const y = (dy !== 0 ? (dy / ystep) * ystep : 0) + ymin;
+
+		return { x, y };
+	}, []);
+
+	const getPosition = React.useCallback((x, y) => {
+		let top = ((y - ymin) / (ymax - ymin)) * 100;
+		let left = ((x - xmin) / (xmax - xmin)) * 100;
+
+		if (top > 100) top = 100;
+		if (top < 0) top = 0;
+		if (axis === 'x') top = 0;
+
+		if (left > 100) left = 100;
+		if (left < 0) left = 0;
+		if (axis === 'y') left = 0;
+
+		return { top, left };
+	}, []);
+
+	const change = React.useCallback(({ top, left }) => {
+		if (!onChange) return;
+		const { x, y } = getNewPosition(top, left);
+		setPos(getPosition(x, y));
+		onChange({
+			x: xreverse ? xmax - x + xmin : x,
+			y: yreverse ? ymax - y + ymin : y,
+		});
+	}, []);
+
+	const handleClick = React.useCallback((e) => {
+		if (disabled) return;
 		if (!container.current) return;
 
-		//const clientPos = getClientPosition(e); figure this out later
+		const clientPos = getClientPosition(e);
 		const rect = container.current.getBoundingClientRect();
-		console.log(rect);
+		change({
+			left: clientPos.x - rect.left,
+			top: clientPos.y - rect.top,
+		});
 	}, []);
 
 	return React.Children.map(children, (child) =>
-		React.cloneElement(child, { container, handleClick }),
+		React.cloneElement(child, {
+			...props,
+			container,
+			handle,
+			start,
+			offset,
+			handleClick,
+			handleTrackMouseDown,
+			handleMouseDown,
+			pos,
+		}),
 	);
 };
 
 const TestComponent: React.FC<TestComponentProps> = () => (
-	<SliderWrapper>
+	<SliderWrapper onChange={({ x, y }) => console.log('change', x, y)}>
 		<Track>
 			<Handle>
 				<Thumb />
