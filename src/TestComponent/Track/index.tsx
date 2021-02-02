@@ -7,7 +7,7 @@ const StyledTrack = styled.div`
 	width: 100%;
 	height: 300px;
 	border-radius: 0;
-	background: green;
+	background: transparent;
 `;
 
 const Track: FC<any> = ({

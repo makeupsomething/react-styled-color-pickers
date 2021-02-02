@@ -1,10 +1,44 @@
 //@ts-nocheck
 import React, { FC } from 'react';
+import styled from 'styled-components';
 import { TestComponentProps } from './types';
 import Track from './Track';
 import Handle from './Handle';
 import Thumb from './Thumb';
 import { getClientPosition } from '../utils';
+import ColorPicker from './ColorPicker';
+
+const Selector = styled.div.attrs((props) => ({
+	style: {
+		backgroundColor: props?.style?.backgroundColor ?? 'pappyawhip',
+	},
+}))`
+	width: 100%;
+	height: 100%;
+`;
+
+const GradientLightToDark = styled.div`
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(to bottom, transparent 0%, #000000 100%),
+		linear-gradient(to right, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
+`;
+
+const SelectorContainer = styled.div`
+	width: 100%;
+	height: 324px;
+	grid-area: selector;
+`;
+
+const PickerContainer = styled.div`
+	width: 255px;
+	height: 100%;
+	border-radius: 2px;
+	box-shadow: rgba(0, 0, 0, 0.3) 0px 0px 2px, rgba(0, 0, 0, 0.3) 0px 4px 8px;
+	grid-template-areas:
+		'selector'
+		'data';
+`;
 
 const SliderWrapper: FC<any> = (props) => {
 	const {
@@ -204,14 +238,91 @@ const SliderWrapper: FC<any> = (props) => {
 	);
 };
 
-const TestComponent: React.FC<TestComponentProps> = () => (
-	<SliderWrapper onChange={({ x, y }) => console.log('change', x, y)}>
-		<Track>
-			<Handle>
-				<Thumb />
-			</Handle>
-		</Track>
-	</SliderWrapper>
-);
+const SaturationWrapper: FC<any> = (props) => {
+	const { color, changeColor, children } = props;
+	const hueBackground = React.useRef('#FFFFFF');
+
+	// const changeHSV = React.useCallback(
+	// 	(h, s, v) => {
+	// 		const { r, g, b } = hsv2rgb(h, s, v);
+	// 		const hex = rgb2hex(r, g, b);
+	// 		const hsl = hex2hsl(hex);
+	// 		currentColor.current = {
+	// 			...currentColor.current,
+	// 			h,
+	// 			s,
+	// 			v,
+	// 			r,
+	// 			g,
+	// 			b,
+	// 			hex,
+	// 			hsl,
+	// 		};
+
+	// 		if (changeColor) {
+	// 			changeColor({
+	// 				...currentColor.current,
+	// 				h,
+	// 				s,
+	// 				v,
+	// 				r,
+	// 				g,
+	// 				b,
+	// 				hex,
+	// 				hsl: hsl,
+	// 			});
+	// 		}
+	// 	},
+	// 	[changeColor],
+	// );
+
+	const changeHSV = React.useCallback(() => {
+		console.log('change');
+	});
+
+	return React.Children.map(children, (child) =>
+		React.cloneElement(child, {
+			...props,
+			hueBackground: hueBackground.current,
+			changeHSV: changeHSV,
+		}),
+	);
+};
+
+const Saturation: FC<any> = (props) => {
+	const { hueBackground, changeHSV, HSV, pointer } = props;
+	return (
+		<Selector style={{ backgroundColor: hueBackground }}>
+			<GradientLightToDark>
+				<SliderWrapper onChange={changeHSV}>
+					<Track>
+						<Handle>
+							<Thumb />
+						</Handle>
+					</Track>
+				</SliderWrapper>
+			</GradientLightToDark>
+		</Selector>
+	);
+};
+
+const TestComponent: React.FC<TestComponentProps> = ({ hueBackground }) => {
+	const [color, setColor] = React.useState('#1c81e6');
+
+	return (
+		<ColorPicker
+			color={color}
+			onChange={({ x, y }) => console.log('change', x, y)}
+		>
+			<PickerContainer>
+				<SelectorContainer>
+					<SaturationWrapper color={color}>
+						<Saturation />
+					</SaturationWrapper>
+				</SelectorContainer>
+			</PickerContainer>
+		</ColorPicker>
+	);
+};
 
 export default TestComponent;
